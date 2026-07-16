@@ -1,0 +1,27 @@
+# Папки виртуального окружения Python
+backend/venv/
+backend/.venv/
+**/__pycache__/
+**/*.pyc
+
+# Локальные базы данных SQLite и логи
+backend/*.sqlite
+backend/*.db
+backend/*.log
+*.sqlite
+*.db
+
+# Конфиденциальные данные (переменные окружения)
+backend/.env
+.env
+
+# Локальные настройки Android
+.gradle/
+android/.gradle/
+android/local.properties
+android/app/build/
+android/build/
+build/
+.idea/
+*.iml
+.DS_Store
