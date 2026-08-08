@@ -15,7 +15,9 @@ from app.schemas import (
     EmailAuthRequest,
     TelegramAuthRequest, 
     TokenResponse, 
-    UserResponse
+    UserResponse,
+    AIDashboardRequest,
+    AIDashboardConfig
 )
 from app.auth import (
     verify_google_token, 
@@ -23,7 +25,7 @@ from app.auth import (
     create_access_token, 
     get_current_user
 )
-from app.gemini_service import analyze_log_text
+from app.gemini_service import analyze_log_text, generate_dashboard_config
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -220,3 +222,10 @@ async def delete_log_entry(
     await db.delete(entry)
     await db.commit()
     return None
+
+@app.post("/api/v1/dashboards/generate", response_model=AIDashboardConfig)
+async def generate_ai_dashboard(req: AIDashboardRequest):
+    """
+    Генерирует умную конфигурацию виджета/дашборда с помощью Gemini AI по свободному промпту пользователя.
+    """
+    return await generate_dashboard_config(req.prompt)

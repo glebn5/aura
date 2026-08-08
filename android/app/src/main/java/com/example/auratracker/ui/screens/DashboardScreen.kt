@@ -270,14 +270,25 @@ fun DynamicBentoCard(
     val valueDisplay = remember(filteredLogs, dashboard) {
         when (dashboard.categoryFilter) {
             "FITNESS" -> {
-                if (dashboard.subCategoryFilter == "pushups") {
-                    val count = filteredLogs.sumOf { 
-                        it.getStructuredLog()?.fitness_data?.reps ?: 50 
+                if (dashboard.subCategoryFilter == "pushups" || dashboard.subCategoryFilter == "pullups" || dashboard.subCategoryFilter == "squats") {
+                    val count = filteredLogs.sumOf { log ->
+                        log.getStructuredLog()?.fitness_data?.reps
+                            ?: log.rawText.filter { it.isDigit() }.toIntOrNull()
+                            ?: 0
                     }
-                    if (isRu) "$count отжиманий" else "$count pushups"
+                    val unitName = when (dashboard.subCategoryFilter) {
+                        "pushups" -> if (isRu) "отжиманий" else "pushups"
+                        "pullups" -> if (isRu) "подтягиваний" else "pullups"
+                        else -> if (isRu) "приседаний" else "squats"
+                    }
+                    "$count $unitName"
                 } else if (dashboard.subCategoryFilter == "running") {
-                    val dist = filteredLogs.sumOf { 
-                        it.getStructuredLog()?.fitness_data?.distance_km ?: 5.0 
+                    val dist = filteredLogs.sumOf { log ->
+                        log.getStructuredLog()?.fitness_data?.distance_km
+                            ?: log.rawText.split(" ").firstNotNullOfOrNull { word ->
+                                word.replace(",", ".").replace("км", "").toDoubleOrNull()
+                            }
+                            ?: 0.0
                     }
                     if (isRu) "${dist.toInt()} км за месяц" else "${dist.toInt()} km this month"
                 } else {
@@ -285,14 +296,18 @@ fun DynamicBentoCard(
                 }
             }
             "FINANCE" -> {
-                val sum = filteredLogs.sumOf { 
-                    it.getStructuredLog()?.finance_data?.amount ?: 1200.0 
+                val sum = filteredLogs.sumOf { log ->
+                    log.getStructuredLog()?.finance_data?.amount
+                        ?: log.rawText.filter { it.isDigit() }.toDoubleOrNull()
+                        ?: 0.0
                 }
                 String.format(Locale.getDefault(), "%,.0f ₽", sum)
             }
             "CAR_MAINTENANCE" -> {
-                val sum = filteredLogs.sumOf { 
-                    it.getStructuredLog()?.car_data?.cost ?: 1000.0 
+                val sum = filteredLogs.sumOf { log ->
+                    log.getStructuredLog()?.car_data?.cost
+                        ?: log.rawText.filter { it.isDigit() }.toDoubleOrNull()
+                        ?: 0.0
                 }
                 String.format(Locale.getDefault(), "%,.0f ₽", sum)
             }

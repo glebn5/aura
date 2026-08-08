@@ -79,9 +79,17 @@ class GeminiStructuredLog(BaseModel):
         description="Краткая выжимка или комментарий (заполняется только при category=OTHER или если данные не попали в другие секции)"
     )
 
-# ==========================================
-# 3. Схемы лог-записей API
-# ==========================================
+class AIDashboardConfig(BaseModel):
+    title_ru: str = Field(..., description="Название виджета на русском")
+    title_en: str = Field(..., description="Название виджета на английском")
+    category_filter: Literal["FINANCE", "FITNESS", "CAR_MAINTENANCE", "ROUTINE", "ALL"] = Field(..., description="Главная категория")
+    sub_category_filter: Optional[str] = Field(None, description="Ключевое слово для подкатегории (например: pushups, coffee, running, fuel, groceries)")
+    time_range_days: int = Field(30, description="Период отслеживания в днях (7, 14, 30, 90, 365)")
+    accent_color_hex: str = Field("#00E5FF", description="НЕОНОВЫЙ HEX цвет в дизайне приложения (например: #00E5FF, #AEEA00, #FF9100, #E040FB)")
+    icon_name: str = Field("chart", description="Иконка: fitness, finance, car, chart")
+
+class AIDashboardRequest(BaseModel):
+    prompt: str = Field(..., description="Запрос пользователя для создания виджета в свободной форме")
 
 class LogProcessRequest(BaseModel):
     raw_text: str = Field(..., max_length=1000)

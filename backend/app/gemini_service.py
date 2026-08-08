@@ -3,7 +3,7 @@ from google import genai
 from google.genai import types
 from google.genai.errors import APIError
 from app.config import settings
-from app.schemas import GeminiStructuredLog, FinanceData, FitnessData, CarMaintenanceData, RoutineData
+from app.schemas import GeminiStructuredLog, FinanceData, FitnessData, CarMaintenanceData, RoutineData, AIDashboardConfig
 
 # Инициализируем клиент Gemini, если передан ключ
 client = None
@@ -120,13 +120,24 @@ def parse_text_mock(text: str) -> GeminiStructuredLog:
         elif "присел" in text_lower or "приседаний" in text_lower:
             activity = "squats"
 
+        reps = None
+        for word in text_lower.split():
+            cleaned = "".join(c for c in word if c.isdigit())
+            if cleaned:
+                try:
+                    reps = int(cleaned)
+                    break
+                except ValueError:
+                    pass
+
         return GeminiStructuredLog(
             category="FITNESS",
             fitness_data=FitnessData(
                 activity_type=activity,
                 distance_km=distance,
                 duration_minutes=duration,
-                intensity_level="high" if any(k in text_lower for k in ["50", "100", "тяжелая", "интенсив"]) else "medium"
+                intensity_level="high" if any(k in text_lower for k in ["50", "100", "тяжелая", "интенсив"]) else "medium",
+                reps=reps
             )
         )
         
@@ -199,3 +210,59 @@ async def analyze_log_text(text: str) -> GeminiStructuredLog:
     except Exception as e:
         print(f"Unexpected error in Gemini service ({type(e).__name__}): {e}")
         return parse_text_mock(text)
+
+async def generate_dashboard_config(prompt: str) -> AIDashboardConfig:
+    """
+    Генерирует уникальную конфигурацию виджета/дашборда с помощью Gemini AI по текстовому описанию пользователя.
+    """
+    if not client:
+        return AIDashboardConfig(
+            title_ru=prompt.capitalize(),
+            title_en=prompt.capitalize(),
+            category_filter="ALL",
+            sub_category_filter=None,
+            time_range_days=30,
+            accent_color_hex="#00E5FF",
+            icon_name="chart"
+        )
+        
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=f"Сгенерируй конфигурацию дашборда/виджета по запросу пользователя: '{prompt}'",
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json",
+                response_schema=AIDashboardConfig,
+                system_instruction="Вы — ИИ-дизайнер виджетов для AuraTracker. Проанализируйте запрос пользователя и верните полную схему виджета с фильтрами, подкатегориями, периодом и неоновым цветом accent_color_hex.",
+                temperature=0.2
+            )
+        )
+        if hasattr(response, "parsed") and isinstance(response.parsed, AIDashboardConfig):
+            return response.parsed
+        if response.text:
+            raw_json = response.text.strip()
+            if raw_json.startswith("```"):
+                raw_json = raw_json.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            data = json.loads(raw_json)
+            return AIDashboardConfig(**data)
+            
+        return AIDashboardConfig(
+            title_ru=prompt.capitalize(),
+            title_en=prompt.capitalize(),
+            category_filter="ALL",
+            sub_category_filter=None,
+            time_range_days=30,
+            accent_color_hex="#00E5FF",
+            icon_name="chart"
+        )
+    except Exception as e:
+        print(f"Error generating dashboard config via Gemini: {e}")
+        return AIDashboardConfig(
+            title_ru=prompt.capitalize(),
+            title_en=prompt.capitalize(),
+            category_filter="ALL",
+            sub_category_filter=None,
+            time_range_days=30,
+            accent_color_hex="#00E5FF",
+            icon_name="chart"
+        )
