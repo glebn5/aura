@@ -51,6 +51,13 @@ import com.example.auratracker.theme.TextSecondary
 import kotlinx.coroutines.launch
 import java.util.Locale
 
+data class CategoryDetailInfo(
+    val categoryKey: String,
+    val accentColor: Color,
+    val titleRu: String,
+    val titleEn: String
+)
+
 @Composable
 fun DashboardScreen(
     repository: LogRepository,
@@ -63,18 +70,36 @@ fun DashboardScreen(
     val isRu = remember { repository.getAppLanguage() == "RU" }
     var showAddDialog by remember { mutableStateOf(false) }
 
+    // State for opening monthly detail dialog
+    var selectedCategoryForDetail by remember { mutableStateOf<CategoryDetailInfo?>(null) }
+
     LaunchedEffect(Unit) {
         repository.seedDefaultDashboardsIfEmpty()
     }
 
+    // Current month timestamp cutoff (from 1st day of current month)
+    val currentMonthStartTs = remember {
+        val cal = java.util.Calendar.getInstance()
+        cal.set(java.util.Calendar.DAY_OF_MONTH, 1)
+        cal.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        cal.set(java.util.Calendar.MINUTE, 0)
+        cal.set(java.util.Calendar.SECOND, 0)
+        cal.set(java.util.Calendar.MILLISECOND, 0)
+        cal.timeInMillis
+    }
+
+    val currentMonthLogs = remember(logs, currentMonthStartTs) {
+        logs.filter { it.createdAt >= currentMonthStartTs }
+    }
+
     // Calculate dynamic totals for Month in Numbers hero card
-    val totalExpenses = remember(logs) {
-        logs.filter { it.category == "FINANCE" }
+    val totalExpenses = remember(currentMonthLogs) {
+        currentMonthLogs.filter { it.category == "FINANCE" }
             .sumOf { it.getStructuredLog()?.finance_data?.amount ?: 0.0 }
     }
 
-    val runningDistance = remember(logs) {
-        logs.filter { it.category == "FITNESS" }
+    val runningDistance = remember(currentMonthLogs) {
+        currentMonthLogs.filter { it.category == "FITNESS" }
             .sumOf { it.getStructuredLog()?.fitness_data?.distance_km ?: 0.0 }
     }
 
@@ -95,10 +120,15 @@ fun DashboardScreen(
         ) {
             Column {
                 Text(
-                    text = "Omnis Hub",
+                    text = "Aura Tracker",
                     fontSize = 28.sp,
                     fontWeight = FontWeight.Bold,
                     color = Color.White
+                )
+                Text(
+                    text = if (isRu) "Статистика за текущий месяц" else "Current month statistics",
+                    fontSize = 12.sp,
+                    color = TextSecondary
                 )
             }
 
@@ -123,7 +153,7 @@ fun DashboardScreen(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(
-                            text = if (isRu) "+ Дашборд" else "+ Widget",
+                            text = if (isRu) "+ Виджет" else "+ Widget",
                             color = NeonCyan,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Bold
@@ -154,38 +184,71 @@ fun DashboardScreen(
 
         // Hero glowing card: "Month in Numbers"
         HeroMonthInNumbersCard(
-            totalExpenses = if (totalExpenses > 0) totalExpenses else 1200.0,
-            runningDistance = if (runningDistance > 0) runningDistance else 15.0,
+            totalExpenses = totalExpenses,
+            runningDistance = runningDistance,
             isRu = isRu
         )
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // Dynamic Bento Cards Grid
-        if (dashboards.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = if (isRu) "Нет дашбордов. Нажмите + Дашборд!" else "No dashboards. Tap + Widget!",
-                    color = TextSecondary,
-                    fontSize = 14.sp
-                )
+        // 5 Core Categories & Dynamic Custom Cards List
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Text(
+                text = if (isRu) "Категории и виджеты" else "Categories & Widgets",
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold,
+                color = Color.White
+            )
+
+            // 5 Main Core Category Bento Cards
+            val mainCategories = listOf(
+                CategoryDetailInfo("FINANCE", Color(0xFF00E5FF), "Финансы", "Finance"),
+                CategoryDetailInfo("FITNESS", Color(0xFFAEEA00), "Фитнес и Спорт", "Fitness & Sport"),
+                CategoryDetailInfo("CAR_MAINTENANCE", Color(0xFFFF9100), "Авто и Обслуживание", "Car Maintenance"),
+                CategoryDetailInfo("ROUTINE", Color(0xFFE040FB), "Рутина и Сон", "Routine & Sleep"),
+                CategoryDetailInfo("OTHER", Color(0xFF448AFF), "Разное и Выжимки", "Other & Summary")
+            )
+
+            // Render 5 main categories in 2-column bento grid layout
+            val pairs = mainCategories.chunked(2)
+            for (pair in pairs) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    for (cat in pair) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            MainCategoryBentoCard(
+                                category = cat,
+                                logs = currentMonthLogs,
+                                isRu = isRu,
+                                onClick = { selectedCategoryForDetail = cat }
+                            )
+                        }
+                    }
+                    if (pair.size == 1) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
             }
-        } else {
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 80.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
-            ) {
-                // Chunk cards into pairs for 2-column bento layout
-                val pairs = dashboards.chunked(2)
-                for (pair in pairs) {
+
+            // Custom AI/User Generated Bento Cards
+            if (dashboards.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = if (isRu) "Пользовательские виджеты" else "Custom AI Widgets",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = TextSecondary
+                )
+                val customPairs = dashboards.chunked(2)
+                for (pair in customPairs) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -199,8 +262,17 @@ fun DashboardScreen(
                                     onDelete = {
                                         scope.launch {
                                             repository.deleteDashboard(dash.id)
-                                            Toast.makeText(context, if (isRu) "Дашборд удален" else "Widget deleted", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, if (isRu) "Виджет удален" else "Widget deleted", Toast.LENGTH_SHORT).show()
                                         }
+                                    },
+                                    onClick = {
+                                        val catInfo = CategoryDetailInfo(
+                                            categoryKey = dash.categoryFilter,
+                                            accentColor = try { Color(android.graphics.Color.parseColor(dash.accentColorHex)) } catch (e: Exception) { NeonCyan },
+                                            titleRu = dash.titleRu,
+                                            titleEn = dash.title
+                                        )
+                                        selectedCategoryForDetail = catInfo
                                     }
                                 )
                             }
@@ -222,11 +294,144 @@ fun DashboardScreen(
             onAddPrompt = { prompt ->
                 scope.launch {
                     repository.addDashboardFromPrompt(prompt)
-                    Toast.makeText(context, if (isRu) "Дашборд создан!" else "Widget created!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(context, if (isRu) "Виджет создан!" else "Widget created!", Toast.LENGTH_SHORT).show()
                     showAddDialog = false
                 }
             }
         )
+    }
+
+    // Full Monthly Detail Dialog when any category widget is tapped
+    selectedCategoryForDetail?.let { detailInfo ->
+        CategoryMonthlyDetailDialog(
+            categoryKey = detailInfo.categoryKey,
+            accentColor = detailInfo.accentColor,
+            categoryTitleRu = detailInfo.titleRu,
+            categoryTitleEn = detailInfo.titleEn,
+            logs = logs,
+            repository = repository,
+            isRu = isRu,
+            onDismiss = { selectedCategoryForDetail = null }
+        )
+    }
+}
+
+@Composable
+fun MainCategoryBentoCard(
+    category: CategoryDetailInfo,
+    logs: List<LogEntryEntity>,
+    isRu: Boolean,
+    onClick: () -> Unit
+) {
+    val categoryLogs = remember(logs, category.categoryKey) {
+        logs.filter { it.category == category.categoryKey }
+    }
+
+    val title = if (isRu) category.titleRu else category.title
+
+    val summaryText = remember(categoryLogs, category.categoryKey, isRu) {
+        when (category.categoryKey) {
+            "FINANCE" -> {
+                val sum = categoryLogs.sumOf { log ->
+                    log.getStructuredLog()?.finance_data?.amount
+                        ?: log.rawText.filter { it.isDigit() }.toDoubleOrNull()
+                        ?: 0.0
+                }
+                String.format(Locale.getDefault(), "%,.0f ₽", sum)
+            }
+            "FITNESS" -> {
+                val totalReps = categoryLogs.sumOf { log ->
+                    log.getStructuredLog()?.fitness_data?.reps
+                        ?: log.rawText.filter { it.isDigit() }.toIntOrNull()
+                        ?: 0
+                }
+                val totalKm = categoryLogs.sumOf { log ->
+                    log.getStructuredLog()?.fitness_data?.distance_km ?: 0.0
+                }
+                if (totalReps > 0) {
+                    "$totalReps reps"
+                } else if (totalKm > 0) {
+                    String.format(Locale.getDefault(), "%.1f км", totalKm)
+                } else {
+                    if (isRu) "${categoryLogs.size} тренировок" else "${categoryLogs.size} workouts"
+                }
+            }
+            "CAR_MAINTENANCE" -> {
+                val sum = categoryLogs.sumOf { log ->
+                    log.getStructuredLog()?.car_data?.cost
+                        ?: log.rawText.filter { it.isDigit() }.toDoubleOrNull()
+                        ?: 0.0
+                }
+                String.format(Locale.getDefault(), "%,.0f ₽", sum)
+            }
+            "ROUTINE" -> {
+                val hours = categoryLogs.sumOf { log ->
+                    log.getStructuredLog()?.routine_data?.duration_hours ?: 0.0
+                }
+                if (hours > 0) String.format(Locale.getDefault(), "%.1f ч.", hours) else if (isRu) "${categoryLogs.size} дел" else "${categoryLogs.size} events"
+            }
+            else -> {
+                if (isRu) "${categoryLogs.size} записей" else "${categoryLogs.size} entries"
+            }
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(22.dp))
+            .background(DarkCard)
+            .border(1.dp, category.accentColor.copy(alpha = 0.6f), RoundedCornerShape(22.dp))
+            .clickable { onClick() }
+            .padding(16.dp)
+    ) {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = category.accentColor,
+                    maxLines = 1
+                )
+                
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(category.accentColor.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ShowChart,
+                        contentDescription = null,
+                        tint = category.accentColor,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = summaryText,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Black,
+                color = Color.White
+            )
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = if (isRu) "Нажмите для статистики →" else "Tap for stats →",
+                fontSize = 11.sp,
+                color = TextSecondary
+            )
+        }
     }
 }
 
@@ -235,7 +440,8 @@ fun DynamicBentoCard(
     dashboard: CustomDashboardEntity,
     logs: List<LogEntryEntity>,
     isRu: Boolean,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onClick: () -> Unit
 ) {
     val accentColor = remember(dashboard.accentColorHex) {
         try {
@@ -323,6 +529,7 @@ fun DynamicBentoCard(
             .clip(RoundedCornerShape(20.dp))
             .background(DarkCard)
             .border(1.dp, accentColor.copy(alpha = 0.5f), RoundedCornerShape(20.dp))
+            .clickable { onClick() }
             .padding(16.dp)
     ) {
         Column {
