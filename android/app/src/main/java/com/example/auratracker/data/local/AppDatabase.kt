@@ -5,9 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [LogEntryEntity::class], version = 1, exportSchema = false)
+@Database(entities = [LogEntryEntity::class, CustomDashboardEntity::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun logDao(): LogDao
+    abstract fun customDashboardDao(): CustomDashboardDao
 
     companion object {
         @Volatile

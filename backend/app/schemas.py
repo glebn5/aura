@@ -29,6 +29,9 @@ class TokenResponse(BaseModel):
 class GoogleAuthRequest(BaseModel):
     id_token: str
 
+class EmailAuthRequest(BaseModel):
+    email: str
+
 class TelegramAuthRequest(BaseModel):
     id: str
     first_name: Optional[str] = None
@@ -47,10 +50,11 @@ class FinanceData(BaseModel):
     category: str = Field(..., description="Категория финансов (например, продукты, транспорт, автосервис, кафе, развлечения)")
 
 class FitnessData(BaseModel):
-    activity_type: str = Field(..., description="Тип активности (например, running, swimming, strength_training)")
+    activity_type: str = Field(..., description="Тип активности (например, running, swimming, pushups, pullups, squats)")
     distance_km: Optional[float] = Field(None, description="Дистанция в километрах (если применимо)")
     duration_minutes: Optional[float] = Field(None, description="Длительность активности в минутах")
     intensity_level: Optional[Literal["low", "medium", "high"]] = Field(None, description="Уровень интенсивности")
+    reps: Optional[int] = Field(None, description="Количество повторений (например, 50 для отжиманий)")
 
 class CarMaintenanceData(BaseModel):
     part_or_service: str = Field(..., description="Название работы или запчасти (например, замена масла, тормозные диски, шиномонтаж)")

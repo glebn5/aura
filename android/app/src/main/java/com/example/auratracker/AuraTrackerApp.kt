@@ -6,7 +6,7 @@ import com.example.auratracker.data.repository.LogRepository
 
 class AuraTrackerApp : Application() {
     val database by lazy { AppDatabase.getDatabase(this) }
-    val repository by lazy { LogRepository(this, database.logDao()) }
+    val repository by lazy { LogRepository(this, database.logDao(), database.customDashboardDao()) }
 
     override fun onCreate() {
         super.onCreate()

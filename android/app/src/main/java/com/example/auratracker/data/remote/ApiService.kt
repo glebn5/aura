@@ -14,12 +14,14 @@ import io.ktor.http.contentType
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.isSuccess
+
 class ApiService(
-    // По умолчанию адрес нашего купленного сервера в Польше!
-    // Для отладки на локальном ПК в эмуляторе можно менять на "http://10.0.2.2:8000"
-    private val baseUrl: String = "http://45.194.66.113:8000",
+    private val baseUrlProvider: () -> String = { "http://10.0.2.2:8000" },
     private val tokenProvider: () -> String?
 ) {
+    private val baseUrl: String get() = baseUrlProvider().trimEnd('/')
     private val jsonInstance = Json {
         ignoreUnknownKeys = true
         coerceInputValues = true
@@ -40,25 +42,59 @@ class ApiService(
     }
 
     suspend fun authenticateWithGoogle(idToken: String): Result<TokenResponse> = runCatching {
-        client.post("$baseUrl/api/v1/auth/google") {
+        val response = client.post("$baseUrl/api/v1/auth/google") {
             contentType(ContentType.Application.Json)
             setBody(GoogleAuthRequest(idToken))
-        }.body()
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
+            error("Ошибка сервера ${response.status.value}: ${errorBody.ifBlank { response.status.description }}")
+        }
+        response.body()
+    }
+
+    suspend fun authenticateWithEmail(email: String): Result<TokenResponse> = runCatching {
+        val response = client.post("$baseUrl/api/v1/auth/email") {
+            contentType(ContentType.Application.Json)
+            setBody(EmailAuthRequest(email))
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
+            error("Ошибка сервера ${response.status.value}: ${errorBody.ifBlank { response.status.description }}")
+        }
+        response.body()
     }
 
     suspend fun processLog(text: String): Result<LogEntryResponse> = runCatching {
-        client.post("$baseUrl/api/v1/logs/process") {
+        val response = client.post("$baseUrl/api/v1/logs/process") {
             contentType(ContentType.Application.Json)
             setBody(LogProcessRequest(text))
-        }.body()
+        }
+        if (!response.status.isSuccess()) {
+            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
+            error("Ошибка сервера ${response.status.value}: ${errorBody.ifBlank { response.status.description }}")
+        }
+        response.body()
     }
 
     suspend fun fetchAllLogs(): Result<List<LogEntryResponse>> = runCatching {
-        client.get("$baseUrl/api/v1/logs").body()
+        val response = client.get("$baseUrl/api/v1/logs")
+        if (!response.status.isSuccess()) {
+            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
+            error("Ошибка сервера ${response.status.value}: ${errorBody.ifBlank { response.status.description }}")
+        }
+        response.body()
     }
 
     suspend fun deleteLog(id: String): Result<Unit> = runCatching {
-        client.delete("$baseUrl/api/v1/logs/$id")
+        val response = client.delete("$baseUrl/api/v1/logs/$id")
+        if (!response.status.isSuccess()) {
+            val errorBody = runCatching { response.bodyAsText() }.getOrDefault("")
+            error("Ошибка сервера ${response.status.value}: ${errorBody.ifBlank { response.status.description }}")
+        }
         Unit
     }
 }
+
+@kotlinx.serialization.Serializable
+data class EmailAuthRequest(val email: String)

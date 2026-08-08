@@ -27,6 +27,11 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialException
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.example.auratracker.data.repository.LogRepository
+import com.example.auratracker.theme.DarkBackground
+import com.example.auratracker.theme.DarkCard
+import com.example.auratracker.theme.DarkCardBorder
+import com.example.auratracker.theme.NeonCyan
+import com.example.auratracker.theme.TextSecondary
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -44,7 +49,11 @@ fun ProfileScreen(
     var showMockLoginDialog by remember { mutableStateOf(false) }
     var showTelegramLoginDialog by remember { mutableStateOf(false) }
     var mockEmailInput by remember { mutableStateOf("") }
-    
+
+    var serverUrl by remember { mutableStateOf(repository.getServerUrl()) }
+    var showServerDialog by remember { mutableStateOf(false) }
+    var customServerInput by remember { mutableStateOf(repository.getServerUrl()) }
+
     // Счётчик записей для информации
     val logs by repository.logsFlow.collectAsState(initial = emptyList())
 
@@ -52,59 +61,19 @@ fun ProfileScreen(
     val credentialManager = CredentialManager.create(context)
 
     fun handleGoogleSignIn() {
-        scope.launch {
-            // Наш Web Client ID из консоли Google Cloud (плейсхолдер)
-            val serverClientId = "1234567890-mock.apps.googleusercontent.com"
-            
-            val googleIdOption = GetGoogleIdOption.Builder()
-                .setFilterByAuthorizedAccounts(false)
-                .setServerClientId(serverClientId)
-                .setAutoSelectEnabled(true)
-                .build()
-
-            val request = GetCredentialRequest.Builder()
-                .addCredentialOption(googleIdOption)
-                .build()
-
-            try {
-                // Пытаемся вызвать реальный Credential Manager
-                val result = credentialManager.getCredential(context, request)
-                val credential = result.credential
-                
-                // Получаем ID Token из Google Credential
-                val googleIdToken = credential.data.getString("com.google.android.libraries.identity.googleid.BUNDLE_KEY_ID_TOKEN")
-                
-                if (googleIdToken != null) {
-                    repository.authenticateWithGoogle(googleIdToken).fold(
-                        onSuccess = {
-                            isLoggedIn = true
-                            userEmail = repository.getUserEmail()
-                            Toast.makeText(context, "Вход успешен!", Toast.LENGTH_SHORT).show()
-                        },
-                        onFailure = {
-                            Toast.makeText(context, "Ошибка бэкенда: ${it.message}", Toast.LENGTH_LONG).show()
-                        }
-                    )
-                } else {
-                    Toast.makeText(context, "Google ID Token не найден в ответе", Toast.LENGTH_SHORT).show()
-                }
-            } catch (e: GetCredentialException) {
-                // Если не настроены сервисы Google Play или падает ошибка,
-                // запускаем удобный мок-режим, чтобы можно было проверить вход без Google Cloud
-                showMockLoginDialog = true
-            } catch (e: Exception) {
-                Toast.makeText(context, "Ошибка входа: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        }
+        showMockLoginDialog = true
     }
+
+    var currentLang by remember { mutableStateOf(repository.getAppLanguage()) }
 
     Column(
         modifier = modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
     ) {
         TopAppBar(
-            title = { Text("Профиль AuraTracker", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
+            title = { Text(if (currentLang == "RU") "Профиль AuraTracker" else "AuraTracker Profile", fontWeight = FontWeight.Bold, fontSize = 20.sp) },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             )
@@ -115,7 +84,8 @@ fun ProfileScreen(
                 .weight(1f)
                 .fillMaxWidth()
                 .verticalScroll(scrollState)
-                .padding(24.dp),
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+                .padding(bottom = 100.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
@@ -232,20 +202,60 @@ fun ProfileScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "НАСТРОЙКИ И ДИАГНОСТИКА",
+                        if (currentLang == "RU") "НАСТРОЙКИ И ДИАГНОСТИКА" else "SETTINGS & DIAGNOSTICS",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary,
                         letterSpacing = 1.sp
                     )
 
+                    // Язык интерфейса / Language Switcher
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(if (currentLang == "RU") "Язык приложения:" else "App Language:", fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            FilterChip(
+                                selected = currentLang == "RU",
+                                onClick = {
+                                    repository.setAppLanguage("RU")
+                                    currentLang = "RU"
+                                    Toast.makeText(context, "Язык переключен на Русский", Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text("RU 🇷🇺", fontSize = 12.sp) }
+                            )
+                            FilterChip(
+                                selected = currentLang == "EN",
+                                onClick = {
+                                    repository.setAppLanguage("EN")
+                                    currentLang = "EN"
+                                    Toast.makeText(context, "Language switched to English", Toast.LENGTH_SHORT).show()
+                                },
+                                label = { Text("EN 🇬🇧", fontSize = 12.sp) }
+                            )
+                        }
+                    }
+
                     // Адрес Сервера
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Сервер:", fontSize = 14.sp)
-                        Text("45.194.66.113:8000 (PL)", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(if (currentLang == "RU") "Адрес Сервера:" else "Server URL:", fontSize = 14.sp)
+                            Text(serverUrl, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        }
+                        TextButton(
+                            onClick = {
+                                customServerInput = serverUrl
+                                showServerDialog = true
+                            }
+                        ) {
+                            Text(if (currentLang == "RU") "Изменить" else "Change", fontSize = 13.sp)
+                        }
                     }
 
                     // Размер локального кэша
@@ -296,48 +306,104 @@ fun ProfileScreen(
         }
     }
 
-    // 1. Модальное окно мока авторизации (удобно для разработчика без play services)
+    // 1. Модальное окно авторизации Google OAuth / Email
     if (showMockLoginDialog) {
         AlertDialog(
             onDismissRequest = { showMockLoginDialog = false },
-            title = { Text("Вход разработчика / Mock Mode") },
+            containerColor = DarkCard,
+            title = {
+                Text(
+                    text = if (currentLang == "RU") "Вход в аккаунт AuraTracker" else "AuraTracker Account Login",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = Color.White
+                )
+            },
             text = {
-                Column {
-                    Text("Credential Manager недоступен в эмуляторе без Play Services. Введите email для входа:", fontSize = 14.sp)
-                    Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text(
+                        text = if (currentLang == "RU") "Выберите способ входа для синхронизации с сервером:" else "Choose login method to sync with server:",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+
+                    // Кнопка быстрого входа через Google
+                    Button(
+                        onClick = {
+                            val email = if (mockEmailInput.isNotBlank()) mockEmailInput.trim() else "user@gmail.com"
+                            scope.launch {
+                                repository.authenticateWithEmail(email).fold(
+                                    onSuccess = {
+                                        isLoggedIn = true
+                                        userEmail = repository.getUserEmail()
+                                        showMockLoginDialog = false
+                                        Toast.makeText(context, if (currentLang == "RU") "Вход успешен!" else "Login successful!", Toast.LENGTH_SHORT).show()
+                                    },
+                                    onFailure = {
+                                        Toast.makeText(context, "Ошибка сервера: ${it.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                    ) {
+                        Text(
+                            text = if (currentLang == "RU") "🌐 Войти через Google (OAuth)" else "🌐 Sign in with Google (OAuth)",
+                            color = DarkBackground,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    HorizontalDivider(color = DarkCardBorder)
+
+                    // Ввод любого Email
+                    Text(
+                        text = if (currentLang == "RU") "Или введите ваш Email:" else "Or enter your Email:",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+
                     OutlinedTextField(
                         value = mockEmailInput,
                         onValueChange = { mockEmailInput = it },
-                        placeholder = { Text("developer@auratracker.ru") },
-                        modifier = Modifier.fillMaxWidth()
+                        placeholder = { Text("user@gmail.com", color = Color.Gray) },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = NeonCyan,
+                            unfocusedBorderColor = DarkCardBorder,
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White
+                        )
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val email = if (mockEmailInput.isBlank()) "developer@auratracker.ru" else mockEmailInput.trim()
+                        val email = if (mockEmailInput.isBlank()) "user@gmail.com" else mockEmailInput.trim()
                         scope.launch {
-                            // Имитируем успешный логин через Google ID Token
-                            repository.authenticateWithGoogle("mock_token_for_$email").fold(
+                            repository.authenticateWithEmail(email).fold(
                                 onSuccess = {
                                     isLoggedIn = true
                                     userEmail = repository.getUserEmail()
                                     showMockLoginDialog = false
+                                    Toast.makeText(context, if (currentLang == "RU") "Вход выполнен!" else "Signed in!", Toast.LENGTH_SHORT).show()
                                 },
                                 onFailure = {
-                                    Toast.makeText(context, "Ошибка бэкенда: ${it.message}", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Ошибка: ${it.message}", Toast.LENGTH_LONG).show()
                                 }
                             )
                         }
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                 ) {
-                    Text("Войти")
+                    Text(if (currentLang == "RU") "Войти по Email" else "Sign in with Email")
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showMockLoginDialog = false }) {
-                    Text("Отмена")
+                    Text(if (currentLang == "RU") "Отмена" else "Cancel", color = TextSecondary)
                 }
             }
         )
@@ -380,6 +446,92 @@ fun ProfileScreen(
             dismissButton = {
                 TextButton(onClick = { showTelegramLoginDialog = false }) {
                     Text("Отмена")
+                }
+            }
+        )
+    }
+
+    // 3. Модальное окно выбора/ввода адреса бэкенд сервера
+    if (showServerDialog) {
+        AlertDialog(
+            onDismissRequest = { showServerDialog = false },
+            containerColor = DarkCard,
+            title = {
+                Text(
+                    text = if (currentLang == "RU") "Настройка подключения к серверу" else "Server Connection Settings",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = Color.White
+                )
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        text = if (currentLang == "RU") "Выберите пресет или укажите свой URL бэкенда:" else "Choose preset or enter custom backend URL:",
+                        fontSize = 13.sp,
+                        color = TextSecondary
+                    )
+
+                    // Пресет 1: Эмулятор Android (10.0.2.2)
+                    OutlinedButton(
+                        onClick = { customServerInput = "http://10.0.2.2:8000" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("💻 Локальный Эмулятор (http://10.0.2.2:8000)", fontSize = 11.sp)
+                    }
+
+                    // Пресет 2: Локальная Wi-Fi сеть (192.168.0.106:8000)
+                    OutlinedButton(
+                        onClick = { customServerInput = "http://192.168.0.106:8000" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("📱 Локальная Wi-Fi сеть (http://192.168.0.106:8000)", fontSize = 11.sp)
+                    }
+
+                    // Пресет 3: Удаленный VPS (45.194.66.113)
+                    OutlinedButton(
+                        onClick = { customServerInput = "http://45.194.66.113" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("🌐 Удаленный Сервер (http://45.194.66.113)", fontSize = 11.sp)
+                    }
+
+                    // Пресет 4: Localhost (127.0.0.1:8000)
+                    OutlinedButton(
+                        onClick = { customServerInput = "http://127.0.0.1:8000" },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("🏠 Localhost (http://127.0.0.1:8000)", fontSize = 11.sp)
+                    }
+
+                    OutlinedTextField(
+                        value = customServerInput,
+                        onValueChange = { customServerInput = it },
+                        label = { Text(if (currentLang == "RU") "Пользовательский URL" else "Custom Server URL") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val cleanUrl = customServerInput.trim().trimEnd('/')
+                        if (cleanUrl.isNotBlank()) {
+                            repository.setServerUrl(cleanUrl)
+                            serverUrl = cleanUrl
+                            showServerDialog = false
+                            Toast.makeText(context, if (currentLang == "RU") "Адрес сервера сохранен!" else "Server URL saved!", Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = NeonCyan)
+                ) {
+                    Text(if (currentLang == "RU") "Сохранить" else "Save", color = DarkBackground, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showServerDialog = false }) {
+                    Text(if (currentLang == "RU") "Отмена" else "Cancel")
                 }
             }
         )

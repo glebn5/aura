@@ -81,10 +81,13 @@ def parse_text_mock(text: str) -> GeminiStructuredLog:
         )
 
     # 3. FITNESS
-    elif any(k in text_lower for k in ["пробежал", "км", "тренировк", "бассейн", "зал", "спорт", "минут", "минуты"]):
+    elif any(k in text_lower for k in [
+        "пробежал", "бег", "км", "тренировк", "бассейн", "зал", "спорт", "минут", "минуты",
+        "отжался", "отжиманий", "отжимания", "присел", "приседаний", "подтянулся", "подтягиваний",
+        "пресс", "жим", "раз", "подходов", "гантели", "штанга", "брусья", "планка"
+    ]):
         distance = None
         if "км" in text_lower:
-            # пробуем взять число перед км
             parts = text_lower.split("км")
             if parts:
                 words = parts[0].strip().split()
@@ -94,7 +97,7 @@ def parse_text_mock(text: str) -> GeminiStructuredLog:
                     except ValueError:
                         pass
         
-        duration = 30.0
+        duration = None
         if "мин" in text_lower:
             parts = text_lower.split("мин")
             if parts:
@@ -104,14 +107,26 @@ def parse_text_mock(text: str) -> GeminiStructuredLog:
                         duration = float(words[-1].replace(",", "."))
                     except ValueError:
                         pass
-                        
+
+        activity = "gym"
+        if "пробежал" in text_lower or "бег" in text_lower:
+            activity = "running"
+        elif "бассейн" in text_lower or "плавал" in text_lower:
+            activity = "swimming"
+        elif "отжался" in text_lower or "отжиманий" in text_lower:
+            activity = "pushups"
+        elif "подтянулся" in text_lower or "подтягиваний" in text_lower:
+            activity = "pullups"
+        elif "присел" in text_lower or "приседаний" in text_lower:
+            activity = "squats"
+
         return GeminiStructuredLog(
             category="FITNESS",
             fitness_data=FitnessData(
-                activity_type="running" if "пробежал" in text_lower or "бег" in text_lower else "gym",
+                activity_type=activity,
                 distance_km=distance,
                 duration_minutes=duration,
-                intensity_level="medium"
+                intensity_level="high" if any(k in text_lower for k in ["50", "100", "тяжелая", "интенсив"]) else "medium"
             )
         )
         
@@ -151,8 +166,7 @@ async def analyze_log_text(text: str) -> GeminiStructuredLog:
         return parse_text_mock(text)
         
     try:
-        # Отправляем запрос к Gemini 2.0 Flash (или 1.5 Flash)
-        # Используем Structured Outputs, передавая pydantic-схему в response_schema
+        # Отправляем запрос к Gemini 2.0 Flash
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=text,
@@ -160,18 +174,28 @@ async def analyze_log_text(text: str) -> GeminiStructuredLog:
                 response_mime_type="application/json",
                 response_schema=GeminiStructuredLog,
                 system_instruction=SYSTEM_INSTRUCTION,
-                temperature=0.1 # Делаем вывод максимально стабильным и предсказуемым
+                temperature=0.1
             )
         )
         
-        # Парсим полученный JSON обратно в схему для дополнительной валидации на бэкенде
-        data = json.loads(response.text)
-        return GeminiStructuredLog(**data)
+        # Если SDK уже распарсил ответ в Pydantic модель
+        if hasattr(response, "parsed") and isinstance(response.parsed, GeminiStructuredLog):
+            return response.parsed
+
+        # Иначе парсим из текста, удаляя возможные markdown-оболочки
+        if response.text:
+            raw_json = response.text.strip()
+            if raw_json.startswith("```"):
+                raw_json = raw_json.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+            data = json.loads(raw_json)
+            return GeminiStructuredLog(**data)
+
+        return parse_text_mock(text)
         
     except APIError as e:
         print(f"Gemini API Error: {e}")
         # Если API выдал ошибку, откатываемся на мок, чтобы бэкенд не падал
         return parse_text_mock(text)
     except Exception as e:
-        print(f"Unexpected error in Gemini service: {e}")
+        print(f"Unexpected error in Gemini service ({type(e).__name__}): {e}")
         return parse_text_mock(text)

@@ -15,7 +15,8 @@ data class FitnessData(
     val activity_type: String,
     val distance_km: Double? = null,
     val duration_minutes: Double? = null,
-    val intensity_level: String? = null
+    val intensity_level: String? = null,
+    val reps: Int? = null
 )
 
 @Serializable

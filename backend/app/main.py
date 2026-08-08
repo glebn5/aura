@@ -12,6 +12,7 @@ from app.schemas import (
     LogProcessRequest, 
     LogEntryResponse, 
     GoogleAuthRequest, 
+    EmailAuthRequest,
     TelegramAuthRequest, 
     TokenResponse, 
     UserResponse
@@ -79,6 +80,33 @@ async def auth_google(req: GoogleAuthRequest, db: AsyncSession = Depends(get_db)
         await db.commit()
     
     # Генерируем JWT токен приложения
+    access_token = create_access_token(data={"sub": user.email})
+    
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=UserResponse.model_validate(user)
+    )
+
+@app.post("/api/v1/auth/email", response_model=TokenResponse)
+async def auth_email(req: EmailAuthRequest, db: AsyncSession = Depends(get_db)):
+    """Прямая авторизация по email пользователя."""
+    email = req.email.strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Некорректный email адрес"
+        )
+    
+    result = await db.execute(select(User).filter(User.email == email))
+    user = result.scalars().first()
+    
+    if not user:
+        user = User(email=email)
+        db.add(user)
+        await db.flush()
+        await db.commit()
+        
     access_token = create_access_token(data={"sub": user.email})
     
     return TokenResponse(

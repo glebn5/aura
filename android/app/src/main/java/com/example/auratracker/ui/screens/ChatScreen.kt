@@ -270,6 +270,9 @@ fun AIStructuredCard(structured: GeminiStructuredLog) {
                             "running" -> "Бег 🏃"
                             "swimming" -> "Плавание 🏊"
                             "gym" -> "Тренажерный зал 🏋️"
+                            "pushups" -> "Отжимания 💪"
+                            "pullups" -> "Подтягивания 🏋️"
+                            "squats" -> "Приседания 🦵"
                             else -> it.activity_type
                         }
                         Text("🎯 Активность: $type", fontSize = 14.sp, fontWeight = FontWeight.Bold)
