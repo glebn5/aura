@@ -327,7 +327,7 @@ fun MainCategoryBentoCard(
         logs.filter { it.category == category.categoryKey }
     }
 
-    val title = if (isRu) category.titleRu else category.title
+    val title = if (isRu) category.titleRu else category.titleEn
 
     val summaryText = remember(categoryLogs, category.categoryKey, isRu) {
         when (category.categoryKey) {
