@@ -15,9 +15,9 @@ SYSTEM_INSTRUCTION = """
 Вы — интеллектуальный ассистент приложения AuraTracker. Ваша задача — проанализировать входящую текстовую запись пользователя на русском или английском языке, классифицировать её в одну из категорий (FINANCE, FITNESS, CAR_MAINTENANCE, ROUTINE, OTHER) и извлечь структурированные параметры согласно предоставленной схеме JSON.
 
 Правила классификации:
-- FINANCE: Расходы, доходы, покупки. Пример: "купил молоко за 100р", "получил зарплату 50к".
-- FITNESS: Спортивные тренировки. Пример: "пробежал 5 км за 30 мин", "сходил на силовую тренировку 1 час".
-- CAR_MAINTENANCE: Ремонт авто, покупка автозапчастей, заправка бензином. Пример: "заменил масло за 3000 рублей", "купил колодки на озоне за 1500р".
+- CAR_MAINTENANCE: Покупка автозапчастей, элементов авто, ремонт, замена деталей, заправка бензином, обслуживание машины (например, "500 рублей на птф для лансер", "заменил масло за 3000 рублей", "купил колодки на озоне за 1500р"). ВАЖНО: Любые траты на автомобили, марки авто (Лансер, BMW, Toyota и др.), детали (ПТФ, фары, масло, шины) ОБЯЗАТЕЛЬНО относите к CAR_MAINTENANCE, а НЕ к FINANCE!
+- FINANCE: Общие бытовые расходы, доходы, покупки продуктов, одежды, техники. Пример: "купил молоко за 100р", "получил зарплату 50к".
+- FITNESS: Спортивные тренировки. Пример: "пробежал 5 км за 30 мин", "сходил на силовую тренировку 1 час", "отжался 100 раз".
 - ROUTINE: Рутинные повседневные дела (сон, чтение книг, учеба, работа). Пример: "спал 8 часов", "учился 3 часа".
 - OTHER: Любые другие записи, не подходящие под категории.
 
@@ -31,9 +31,42 @@ def parse_text_mock(text: str) -> GeminiStructuredLog:
     """
     text_lower = text.lower()
     
-    # 1. FINANCE
-    if any(k in text_lower for k in ["руб", "рублей", "коп", "потратил", "купил", "оплатил", "цена", "стоило", "$", "eur", "usd"]):
-        # Попробуем вытащить число
+    # 1. CAR_MAINTENANCE (проверяем раньше общей FINANCE, если есть упоминания деталей или авто)
+    if any(k in text_lower for k in ["машин", "авто", "лансер", "птф", "запчаст", "масло", "шины", "бензин", "заправка", "озон", "колодк", "сто", "фары", "двигател", "бмв", "bmw", "audi", "toyota", "ford", "kia", "hyundai"]):
+        cost = None
+        for word in text_lower.split():
+            cleaned = "".join(c for c in word if c.isdigit() or c == ".")
+            if cleaned:
+                try:
+                    cost = float(cleaned)
+                    break
+                except ValueError:
+                    pass
+        
+        part_name = "Запчасти / Авто"
+        if "птф" in text_lower:
+            part_name = "ПТФ (Противотуманки)"
+        elif "масло" in text_lower:
+            part_name = "Замена масла"
+        elif "шины" in text_lower or "колеса" in text_lower:
+            part_name = "Шины / Колеса"
+        elif "бензин" in text_lower or "заправка" in text_lower:
+            part_name = "Заправка бензином"
+
+        if "лансер" in text_lower or "lancer" in text_lower:
+            part_name += " (Lancer)"
+
+        return GeminiStructuredLog(
+            category="CAR_MAINTENANCE",
+            car_data=CarMaintenanceData(
+                part_or_service=part_name,
+                cost=cost,
+                currency="RUB"
+            )
+        )
+
+    # 2. FINANCE
+    elif any(k in text_lower for k in ["руб", "рублей", "коп", "потратил", "купил", "оплатил", "цена", "стоило", "$", "eur", "usd"]):
         amount = 100.0
         for word in text_lower.split():
             cleaned = "".join(c for c in word if c.isdigit() or c == ".")
@@ -57,26 +90,6 @@ def parse_text_mock(text: str) -> GeminiStructuredLog:
                 currency="RUB" if "$" not in text_lower else "USD",
                 item=item,
                 category="food" if "кофе" in text_lower or "продукты" in text_lower else "shopping"
-            )
-        )
-        
-    # 2. CAR_MAINTENANCE
-    elif any(k in text_lower for k in ["машин", "авто", "запчаст", "масло", "шины", "бензин", "заправка", "озон"]):
-        cost = 1000.0
-        for word in text_lower.split():
-            cleaned = "".join(c for c in word if c.isdigit() or c == ".")
-            if cleaned:
-                try:
-                    cost = float(cleaned)
-                    break
-                except ValueError:
-                    pass
-        return GeminiStructuredLog(
-            category="CAR_MAINTENANCE",
-            car_data=CarMaintenanceData(
-                part_or_service="Обслуживание автомобиля/запчасти",
-                cost=cost,
-                currency="RUB"
             )
         )
 

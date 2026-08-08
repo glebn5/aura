@@ -320,37 +320,47 @@ fun MonthlyCategorySummaryHero(
                     }
                 }
                 "FITNESS" -> {
-                    val totalReps = monthLogs.sumOf { 
-                        it.getStructuredLog()?.fitness_data?.reps
-                            ?: it.rawText.filter { c -> c.isDigit() }.toIntOrNull()
-                            ?: 0
-                    }
+                    val sportsList = monthLogs.mapNotNull { log ->
+                        log.getStructuredLog()?.fitness_data?.activity_type
+                            ?: log.rawText.split(" ").firstOrNull { w -> w.length > 3 && !w.any { c -> c.isDigit() } }
+                    }.distinct().joinToString(", ").replaceFirstChar { it.uppercase() }
+
                     val totalKm = monthLogs.sumOf { it.getStructuredLog()?.fitness_data?.distance_km ?: 0.0 }
                     val totalMinutes = monthLogs.sumOf { it.getStructuredLog()?.fitness_data?.duration_minutes ?: 0.0 }
 
                     Text(if (isRu) "Статистика тренировок за месяц" else "Monthly Fitness Summary", fontSize = 13.sp, color = TextSecondary)
-                    Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = if (sportsList.isNotBlank()) sportsList else if (isRu) "Тренировки" else "Workouts",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = accentColor
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
                         Column {
-                            Text(if (isRu) "Повторения (reps)" else "Total Reps", fontSize = 11.sp, color = TextSecondary)
-                            Text("$totalReps", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = accentColor)
+                            Text(if (isRu) "Тренировок" else "Workouts", fontSize = 11.sp, color = TextSecondary)
+                            Text("${monthLogs.size}", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                         Column {
-                            Text(if (isRu) "Дистанция (км)" else "Distance (km)", fontSize = 11.sp, color = TextSecondary)
-                            Text(String.format(Locale.getDefault(), "%.1f км", totalKm), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(if (isRu) "Дистанция" else "Distance", fontSize = 11.sp, color = TextSecondary)
+                            Text(String.format(Locale.getDefault(), "%.1f км", totalKm), fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                         Column {
-                            Text(if (isRu) "Время (мин)" else "Duration (min)", fontSize = 11.sp, color = TextSecondary)
-                            Text("${totalMinutes.toInt()} мин", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Text(if (isRu) "Время" else "Duration", fontSize = 11.sp, color = TextSecondary)
+                            Text("${totalMinutes.toInt()} мин", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
                 "CAR_MAINTENANCE" -> {
                     val totalCost = monthLogs.sumOf { it.getStructuredLog()?.car_data?.cost ?: 0.0 }
-                    val servicesCount = monthLogs.size
+                    val carPartsList = monthLogs.mapNotNull { log ->
+                        log.getStructuredLog()?.car_data?.part_or_service
+                            ?: log.rawText
+                    }.distinct().take(3).joinToString(", ")
 
                     Text(if (isRu) "Расходы на авто за месяц" else "Monthly Car Expenses", fontSize = 13.sp, color = TextSecondary)
                     Spacer(modifier = Modifier.height(4.dp))
@@ -361,7 +371,11 @@ fun MonthlyCategorySummaryHero(
                         color = accentColor
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(if (isRu) "Работы / Запчасти: $servicesCount записей" else "Services / Parts: $servicesCount entries", fontSize = 12.sp, color = Color.White)
+                    if (carPartsList.isNotBlank()) {
+                        Text(if (isRu) "Авто / Запчасти: $carPartsList" else "Car / Parts: $carPartsList", fontSize = 12.sp, color = Color.White)
+                    } else {
+                        Text(if (isRu) "Записей: ${monthLogs.size}" else "Entries: ${monthLogs.size}", fontSize = 12.sp, color = Color.White)
+                    }
                 }
                 "ROUTINE" -> {
                     val totalHours = monthLogs.sumOf { it.getStructuredLog()?.routine_data?.duration_hours ?: 0.0 }
